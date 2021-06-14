@@ -110,12 +110,12 @@ class RPCCon:
         data = self.u.recvfrom(4096)[0]
 
         rpc = PNRPCHeader(data)
-        #nrd = PNNRDData(rpc.payload)
-        #ar = PNARBlockRequest(nrd.payload)
+        nrd = PNNRDData(rpc.payload)
+        ar = PNIODReleaseBlock(nrd.payload)
         #block = PNBlockHeader(iod.block_header)
         
         self.live = datetime.now()
-        return rpc
+        return ar
 
     def read(self, api, slot, subslot, idx, len=3932):
         self._check_timeout()
