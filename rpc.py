@@ -89,16 +89,44 @@ class RPCCon:
         
         self.live = datetime.now()
 
-    def read(self, api, slot, subslot, idx):
+    def release(self, src_mac=None):
+        if self.live is None:
+            self.src_mac = src_mac
+
+        block = PNBlockHeader(0x0114, PNIODReleaseBlock.fmt_size - 4, 0x01, 0x00)
+        ar = PNIODReleaseBlock(bytes(block),
+            0x0000, # padding
+            self.ar_uuid, # AR UUID
+            0x1234, # Session key
+            0x0000, #padding
+            0x0004, # Command: Release
+            0x0000, # Control block properties
+            payload=bytes()
+        )
+        nrd = self._create_nrd(ar)
+        rpc = self._create_rpc(PNRPCHeader.RELEASE, nrd)
+        self.u.sendto(bytes(rpc), self.peer)
+        
+        data = self.u.recvfrom(4096)[0]
+
+        rpc = PNRPCHeader(data)
+        #nrd = PNNRDData(rpc.payload)
+        #ar = PNARBlockRequest(nrd.payload)
+        #block = PNBlockHeader(iod.block_header)
+        
+        self.live = datetime.now()
+        return rpc
+
+    def read(self, api, slot, subslot, idx, len=3932):
         self._check_timeout()
         
         block = PNBlockHeader(PNBlockHeader.IDOReadRequestHeader, 60, 0x01, 0x00)
-        iod = PNIODHeader(bytes(block), 0, self.ar_uuid, api, slot, subslot, 0, idx, 4096, bytes(16), bytes(8), payload=bytes())
+        iod = PNIODHeader(bytes(block), 0, self.ar_uuid, api, slot, subslot, 0, idx, len, bytes(16), bytes(8), payload=bytes())
         nrd = self._create_nrd(iod)
         rpc = self._create_rpc(PNRPCHeader.READ, nrd)
         self.u.sendto(bytes(rpc), self.peer)
         
-        data = self.u.recvfrom(4096)[0]
+        data = self.u.recvfrom(len + 164)[0]
         rpc = PNRPCHeader(data)
         nrd = PNNRDData(rpc.payload)
         iod = PNIODHeader(nrd.payload)
