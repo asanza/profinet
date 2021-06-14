@@ -6,6 +6,7 @@ from util import *
 from protocol import *
 
 import dcp
+from uuid import uuid4
 
 
 def get_station_info(s, src, name):
@@ -15,11 +16,12 @@ def get_station_info(s, src, name):
 
 
 class RPCCon:
-    def __init__(self, info):
+    def __init__(self, info, key = 0x1234):
         self.info = info
         self.peer = (info.ip, 0x8894)
+        self.key = key
         
-        self.ar_uuid = bytes([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff])
+        self.ar_uuid = uuid4()
         self.activity_uuid = self.ar_uuid
         
         self.local_object_uuid  = PNRPCHeader.OBJECT_UUID_PREFIX + bytes([0x00, 0x01, 0x76,              0x54,             0x32,                 0x10])
@@ -38,7 +40,7 @@ class RPCCon:
             0x00, # Serial High
             self.remote_object_uuid,
             PNRPCHeader.IFACE_UUID_DEVICE,
-            self.activity_uuid,
+            self.activity_uuid.bytes,
             0, # ServerBootTime
             1, # InterfaceVersion
             0, # SequenceNumber
@@ -66,8 +68,8 @@ class RPCCon:
         block = PNBlockHeader(0x0101, PNARBlockRequest.fmt_size - 2, 0x01, 0x00)
         ar = PNARBlockRequest(bytes(block),
             0x0006, # AR Type
-            self.ar_uuid, # AR UUID
-            0x1234, # Session key
+            self.ar_uuid.bytes, # AR UUID
+            self.key, # Session key
             self.src_mac,
             self.local_object_uuid,
             0x131, # AR Properties
@@ -96,8 +98,8 @@ class RPCCon:
         block = PNBlockHeader(0x0114, PNIODReleaseBlock.fmt_size - 4, 0x01, 0x00)
         ar = PNIODReleaseBlock(bytes(block),
             0x0000, # padding
-            self.ar_uuid, # AR UUID
-            0x1234, # Session key
+            self.ar_uuid.bytes, # AR UUID
+            self.key, # Session key
             0x0000, #padding
             0x0004, # Command: Release
             0x0000, # Control block properties
@@ -121,7 +123,7 @@ class RPCCon:
         self._check_timeout()
         
         block = PNBlockHeader(PNBlockHeader.IDOReadRequestHeader, 60, 0x01, 0x00)
-        iod = PNIODHeader(bytes(block), 0, self.ar_uuid, api, slot, subslot, 0, idx, len, bytes(16), bytes(8), payload=bytes())
+        iod = PNIODHeader(bytes(block), 0, self.ar_uuid.bytes, api, slot, subslot, 0, idx, len, bytes(16), bytes(8), payload=bytes())
         nrd = self._create_nrd(iod)
         rpc = self._create_rpc(PNRPCHeader.READ, nrd)
         self.u.sendto(bytes(rpc), self.peer)
@@ -154,7 +156,7 @@ class RPCCon:
     def write(self, api, slot, subslot, idx, data):
         self._check_timeout()
         block = PNBlockHeader(0x8, 60, 0x01, 0x00)
-        iod = PNIODHeader(bytes(block), 0, self.ar_uuid, api, slot, subslot, 0, idx, len(data), bytes(16), bytes(8), payload=bytes(data))
+        iod = PNIODHeader(bytes(block), 0, self.ar_uuid.bytes, api, slot, subslot, 0, idx, len(data), bytes(16), bytes(8), payload=bytes(data))
         nrd = self._create_nrd(iod)
         rpc = self._create_rpc(PNRPCHeader.WRITE, nrd)
         self.u.sendto(bytes(rpc), self.peer)
