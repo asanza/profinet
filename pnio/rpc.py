@@ -2,10 +2,10 @@ from struct import unpack
 from socket import MSG_WAITALL
 from datetime import datetime
 
-from util import *
-from protocol import *
+from .util import *
+from .protocol import *
 
-import dcp
+from . import dcp
 from uuid import uuid4
 
 

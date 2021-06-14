@@ -1,8 +1,7 @@
 import argparse, time
 
-
-from util import *
-from protocol import *
+from .util import *
+from .protocol import *
 
 
 params = {
