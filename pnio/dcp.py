@@ -1,5 +1,5 @@
 import argparse, time
-
+from ipaddress import IPv4Address as ipv4addr
 from .util import *
 from .protocol import *
 
@@ -19,6 +19,13 @@ class DCPDeviceDescription:
         self.gateway = s2ip(blocks[PNDCPBlock.IP_ADDRESS][8:12])
         self.vendorHigh, self.vendorLow, self.devHigh, self.devLow = unpack(">BBBB", blocks[PNDCPBlock.DEVICE_ID][0:4])
 
+def get_ip(s, src, target):
+    r = get_param(s, src, target, "ip")
+    return (ipv4addr(r[0:4]), ipv4addr(r[4:8]), ipv4addr(r[8:12]))
+
+def set_ip(s, src, target, addr, netmask, gateway=ipv4addr("0.0.0.0")):
+    r = addr.packed + netmask.packed + gateway.packed
+    return set_param(s, src, target, "ip", r)
 
 def get_param(s, src, target, param):
     dst = s2mac(target)
@@ -44,7 +51,7 @@ def set_param(s, src, target, param, value):
     
     param = params[param]
     
-    block = PNDCPBlockRequest(param[0], param[1], len(value) + 2, bytes([0x00, 0x00]) + bytes(value, encoding='ascii'))
+    block = PNDCPBlockRequest(param[0], param[1], len(value) + 2, bytes([0x00, 0x00]) + value)
     dcp   = PNDCPHeader(0xfefd, PNDCPHeader.SET, PNDCPHeader.REQUEST, 0x012345, 0, len(value) + 6 + (1 if len(value) % 2 == 1 else 0), block)
     eth   = EthernetVLANHeader(dst, src, 0x8100, 0, PNDCPHeader.ETHER_TYPE, dcp)
     
@@ -53,9 +60,6 @@ def set_param(s, src, target, param, value):
     # ignore response
     s.recv(1522)
     
-    time.sleep(2)
-
-
 def send_discover(s, src):
     
     block = PNDCPBlockRequest(0xFF, 0xFF, 0, bytes())
@@ -74,10 +78,10 @@ def send_request(s, src, t, value):
     s.send(bytes(eth))
 
 
-def read_response(s, my_mac, to=20, once=False, debug=False):
+def read_response(s, my_mac, to=20, once=True, debug=False):
     ret = {}
     found = []
-    s.settimeout(2)
+    s.settimeout(1)
     try:
         with max_timeout(to) as t:
             while True:

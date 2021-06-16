@@ -30,6 +30,7 @@ class RPCCon:
         self.live = None
         
         self.u = socket(AF_INET, SOCK_DGRAM)
+        self.u.settimeout(1)
 
 
     def _create_rpc(self, operation, nrd):
@@ -65,6 +66,8 @@ class RPCCon:
         if self.live is None:
             self.src_mac = src_mac
 
+        arprop = ( 1 << 0) | (1 << 3) | ( 1 << 4) | (1 << 7) | ( 1 << 8)
+
         block = PNBlockHeader(0x0101, PNARBlockRequest.fmt_size - 2, 0x01, 0x00)
         ar = PNARBlockRequest(bytes(block),
             0x0006, # AR Type
@@ -72,7 +75,8 @@ class RPCCon:
             self.key, # Session key
             self.src_mac,
             self.local_object_uuid,
-            0x131, # AR Properties
+            arprop,
+#            0x131, # AR Properties
             100, # Timeout factor
             0x8892, # udp port?
             2,
@@ -118,6 +122,27 @@ class RPCCon:
         
         self.live = datetime.now()
         return ar
+    
+    def param_end(self):
+        self._check_timeout()
+        block = PNBlockHeader(0x0110, 0x1c, 0x01, 0x00)
+        ar = PNIODReleaseBlock(bytes(block), 
+            0x0000, 
+            self.ar_uuid.bytes, 
+            self.key, 
+            0x0000, 
+            0x0001, 
+            0x0000, 
+            bytes())
+        nrd = self._create_nrd(ar)
+        rpc = self._create_rpc(PNRPCHeader.CONTROL, nrd)
+        self.u.sendto(bytes(rpc), self.peer)
+        
+        data = self.u.recvfrom(4096)[0]
+        # ignore response
+        
+        self.live = datetime.now()
+
 
     def read(self, api, slot, subslot, idx, len=3932):
         self._check_timeout()
@@ -138,9 +163,9 @@ class RPCCon:
         
         return iod
 
-    def read_implicit(self, api, slot, subslot, idx):
+    def read_implicit(self, api, slot, subslot, idx, len=3932):
         block = PNBlockHeader(PNBlockHeader.IDOReadRequestHeader, 60, 0x01, 0x00)
-        iod = PNIODHeader(bytes(block), 0, bytes(16), api, slot, subslot, 0, idx, 4096, bytes(16), bytes(8), payload=bytes())
+        iod = PNIODHeader(bytes(block), 0, bytes(16), api, slot, subslot, 0, idx, len, bytes(16), bytes(8), payload=bytes())
         nrd = self._create_nrd(iod)
         rpc = self._create_rpc(PNRPCHeader.IMPLICIT_READ, nrd)
         self.u.sendto(bytes(rpc), self.peer)
